@@ -1,0 +1,176 @@
+/*
+Theme Name: Hello Elementor Child
+Theme URI: https://elementor.com/hello-theme/
+Template: hello-elementor
+Author: Your Name
+Author URI: https://yoursite.com
+Description: Hello Elementor Child Theme
+Version: 1.0.0
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: hello-elementor-child
+*/
+
+body {
+    background-color: #fef9f3!important;
+}
+
+.site-main {
+    max-width: 1440px!important;
+    margin: 0px auto;
+  }
+
+.woocommerce-message {
+    border-top-color: #2F2C27!important;
+    background: none!important;
+  }
+  
+  .woocommerce-message::before {
+    content: "\e015";
+    color: #2F2C27!important;
+  }
+
+.woocommerce-message .restore-item {
+    color: #E10000!important;
+}  
+
+
+
+
+.branch-hero-section {
+    width: 100%;
+    height: 100vh;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.branch-hero-title {
+    font-size: 120px;
+    color: white;
+    text-transform: lowercase;
+    font-weight: bold;
+}
+
+.payment-method-container {
+    transition: all 0.3s ease;
+}
+
+.payment-method-container.active {
+    background-color: #2F2C27;
+    border-color: #2F2C27;
+}
+
+.payment-method-container.active .payment-method-label {
+    color: white;
+}
+
+.payment-method-icon.active {
+    filter: brightness(0) invert(1);
+}
+
+.payment-method-label.active {
+    color: white;
+}
+
+/* Checkout Place Order Button Styles */
+.wc-block-checkout__actions .wc-block-components-checkout-place-order-button {
+    position: relative;
+    width: fit-content;
+    cursor: pointer;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: unset !important;
+    margin-left: auto !important;
+}
+
+.wc-block-checkout__actions .wc-block-components-checkout-place-order-button{
+    background-image: url('assets/icons/button-circles.svg')!important;
+    background-size: 250px!important;
+    background-repeat: no-repeat!important;
+    background-position: center center!important;
+    color: #000 !important;
+    border: none !important;
+    font-size: 14px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100px!important;
+    z-index: 0;
+}
+
+.wc-block-checkout__actions .wc-block-components-checkout-place-order-button > span {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 224px;
+    font-family: 'PP Neue Machina' !important;
+    font-size: 1.25rem !important;
+    text-transform: uppercase;
+    color: black !important;
+}
+
+/* Hover state */
+.wc-block-checkout__actions .wc-block-components-checkout-place-order-button:hover {
+    opacity: 0.9;
+}
+
+/* Coupon Button Styles */
+.wc-block-components-totals-coupon__button {
+    position: relative;
+    width: fit-content;
+    cursor: pointer;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: unset !important;
+    margin-left: auto !important;
+}
+
+.wc-block-components-totals-coupon__button {
+    background-image: url('assets/icons/button-circles.svg')!important;
+    background-size: 180px!important;
+    background-repeat: no-repeat!important;
+    background-position: center center!important;
+    color: #000 !important;
+    border: none !important;
+    font-size: 14px !important;
+	
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 70px!important;
+    z-index: 0;
+}
+
+
+
+.wc-block-components-totals-coupon__button > span {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 160px;
+    font-family: 'PP Neue Machina' !important;
+    font-size: 1rem !important;
+    text-transform: uppercase;
+    color: black !important;
+}
+
+/* Hover state */
+.wc-block-components-totals-coupon__button:hover {
+    opacity: 0.9;
+}
+
+/* shop page orderby */
+
+.orderby, .orderby option {
+    background: none!important;
+}

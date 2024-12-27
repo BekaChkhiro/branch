@@ -1,0 +1,599 @@
+<?php
+/**
+ * Branch Single Product Widget
+ */
+
+class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
+
+    public function get_name() {
+        return 'branch_single_product';
+    }
+
+    public function get_title() {
+        return esc_html__('Branch Single Product', 'child-hello-elementor');
+    }
+
+    public function get_icon() {
+        return 'eicon-product-single';
+    }
+
+    public function get_categories() {
+        return ['branch'];
+    }
+
+    public function get_script_depends() {
+        return ['jquery', 'swiper-bundle', 'wc-add-to-cart-variation'];
+    }
+
+    public function get_style_depends() {
+        return ['swiper-bundle'];
+    }
+
+    protected function register_controls() {
+        $this->start_controls_section(
+            'product_section',
+            [
+                'label' => esc_html__('Product Settings', 'child-hello-elementor'),
+                'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
+            ]
+        );
+
+        $this->add_control(
+            'use_current_product',
+            [
+                'label' => esc_html__('Use Current Product', 'child-hello-elementor'),
+                'type' => \Elementor\Controls_Manager::SWITCHER,
+                'label_on' => esc_html__('Yes', 'child-hello-elementor'),
+                'label_off' => esc_html__('No', 'child-hello-elementor'),
+                'default' => 'yes',
+            ]
+        );
+
+        $this->add_control(
+            'product_id',
+            [
+                'label' => esc_html__('Select Product', 'child-hello-elementor'),
+                'type' => \Elementor\Controls_Manager::SELECT2,
+                'options' => $this->get_products_list(),
+                'default' => '',
+                'condition' => [
+                    'use_current_product' => '',
+                ],
+            ]
+        );
+
+        $this->end_controls_section();
+
+        $this->start_controls_section(
+            'style_section',
+            [
+                'label' => esc_html__('Style', 'child-hello-elementor'),
+                'tab' => \Elementor\Controls_Manager::TAB_STYLE,
+            ]
+        );
+
+        $this->add_control(
+            'title_color',
+            [
+                'label' => esc_html__('Title Color', 'child-hello-elementor'),
+                'type' => \Elementor\Controls_Manager::COLOR,
+                'selectors' => [
+                    '{{WRAPPER}} .product-title' => 'color: {{VALUE}}',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'price_color',
+            [
+                'label' => esc_html__('Price Color', 'child-hello-elementor'),
+                'type' => \Elementor\Controls_Manager::COLOR,
+                'selectors' => [
+                    '{{WRAPPER}} .price' => 'color: {{VALUE}}',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'button_bg_color',
+            [
+                'label' => esc_html__('Button Background', 'child-hello-elementor'),
+                'type' => \Elementor\Controls_Manager::COLOR,
+                'selectors' => [
+                    '{{WRAPPER}} .add-to-cart-button' => 'background-color: {{VALUE}}',
+                ],
+            ]
+        );
+
+        $this->end_controls_section();
+    }
+
+    private function get_products_list() {
+        $products = wc_get_products([
+            'status' => 'publish',
+            'limit' => -1,
+        ]);
+
+        $options = [];
+        foreach ($products as $product) {
+            $options[$product->get_id()] = $product->get_name();
+        }
+
+        return $options;
+    }
+
+    protected function render_quantity_controls() {
+        ?>
+        <div class="quantity-controls">
+            <h4 class="text-base mb-2">QUANTITY</h4>
+            <div class="flex items-center border border-[#E5E7EB] rounded-full w-fit">
+                <button type="button" class="minus px-4 py-2 text-lg font-semibold hover:bg-gray-100 rounded-l-full"
+                        style="background: none; border-right: 1px solid #E5E7EB;">
+                    -
+                </button>
+                <div class="quantity">
+                    <input type="number" 
+                           name="quantity"
+                           class="quantity-input w-12 text-center border-none focus:outline-none" 
+                           value="1" 
+                           min="1"
+                           style="-moz-appearance: textfield;">
+                </div>
+                <button type="button" class="plus px-4 py-2 text-lg font-semibold hover:bg-gray-100 rounded-r-full"
+                        style="background: none; border-left: 1px solid #E5E7EB;">
+                    +
+                </button>
+            </div>
+        </div>
+
+        <style>
+            .quantity-controls {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .quantity-controls .quantity {
+                border: none!important;
+                background: #fef9f3!important;
+            }
+
+            .quantity-controls input {
+                width: 32px;
+                height: 32px;
+                text-align: center;
+                border: none;
+                font-size: 14px;
+                padding: 0;
+                margin: 0;
+                -moz-appearance: textfield;
+                background: none!important;
+            }
+
+            .quantity-controls input::-webkit-outer-spin-button,
+            .quantity-controls input::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+
+            .quantity-controls button {
+                width: 32px;
+                height: 32px;
+                border: none;
+                background: none;
+                cursor: pointer;
+                font-size: 16px;
+                color: #2F2C27;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .quantity-controls button:hover {
+                background: #f5f5f5;
+                border-radius: 20px;
+            }
+
+            .quantity-controls .minus:hover, .minus:focus, .plus:hover, .plus:focus {
+                color: black;
+            }
+        </style>
+        <?php
+    }
+
+    protected function render() {
+        $settings = $this->get_settings_for_display();
+        
+        if ($settings['use_current_product'] === 'yes' && is_product()) {
+            $product_id = get_queried_object_id();
+        } else {
+            $product_id = $settings['product_id'];
+        }
+
+        if (!$product_id) {
+            if (is_product()) {
+                $product_id = get_queried_object_id();
+            } else {
+                echo esc_html__('Please select a product or use this widget on a product page.', 'child-hello-elementor');
+                return;
+            }
+        }
+
+        $product = wc_get_product($product_id);
+        if (!$product) return;
+
+        $variations = [];
+        $variation_attributes = [];
+        if ($product->is_type('variable')) {
+            $variations = $product->get_available_variations();
+            $variation_attributes = $product->get_variation_attributes();
+        }
+        ?>
+        <div class="branch-single-product container w-full md:px-0">
+            <div class="flex flex-col md:flex-row gap-8 justify-between">
+                <div class="w-full md:w-1/2 relative">
+                    <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/images/corner-design.svg" alt="" class="absolute -top-16 -left-8 z-10 w-48 pointer-events-none">
+                    <?php
+                    $attachment_ids = $product->get_gallery_image_ids();
+                    $featured_image_id = $product->get_image_id();
+                    
+                    if ($featured_image_id) {
+                        echo '<div class="main-image-container" style="max-height: 600px; height: 600px; display: flex; align-items: center; justify-content: center; overflow: hidden;">';
+                        echo wp_get_attachment_image($featured_image_id, 'full', false, ['class' => 'w-full h-full object-contain main-product-image']);
+                        echo '</div>';
+                    }
+                    
+                    if ($attachment_ids) {
+                        echo '<div class="swiper product-thumbnails">';
+                        echo '<div class="swiper-wrapper">';
+                        if ($featured_image_id) {
+                            $full_image_url = wp_get_attachment_image_url($featured_image_id, 'full');
+                            echo '<div class="swiper-slide thumbnail-item" data-full-image="' . esc_attr($full_image_url) . '">';
+                            echo wp_get_attachment_image($featured_image_id, 'large', false, ['class' => 'w-full h-full object-cover cursor-pointer']);
+                            echo '</div>';
+                        }
+                        foreach ($attachment_ids as $attachment_id) {
+                            $full_image_url = wp_get_attachment_image_url($attachment_id, 'full');
+                            echo '<div class="swiper-slide thumbnail-item" data-full-image="' . esc_attr($full_image_url) . '">';
+                            echo wp_get_attachment_image($attachment_id, 'large', false, ['class' => 'w-full h-full object-cover cursor-pointer']);
+                            echo '</div>';
+                        }
+                        echo '</div>';
+                        echo '<div class="swiper-button-next !-right-1"></div>';
+                        echo '<div class="swiper-button-prev !-left-1"></div>';
+                        echo '</div>';
+                    }
+                    ?>
+                </div>
+
+                <div class="product-summary w-full md:w-1/2 md:px-0">
+                    <h1 class="product-title text-2xl md:text-4xl font-normal mb-2 uppercase"><?php echo esc_html($product->get_name()); ?></h1>
+                    <div class="price text-2xl md:text-4xl uppercase mb-4"><?php echo $product->get_price_html(); ?></div>
+                    <div class="description text-lg md:text-xl uppercase mb-8"><?php echo wp_kses_post($product->get_description()); ?></div>
+
+                    <form class="cart variations_form" action="<?php echo esc_url(apply_filters('woocommerce_add_to_cart_form_action', $product->get_permalink())); ?>" method="post" enctype='multipart/form-data' data-product_id="<?php echo absint($product_id); ?>" data-product_variations="<?php echo htmlspecialchars(json_encode($variations)) ?>">
+                        <?php wp_nonce_field('add-to-cart', 'add-to-cart-nonce'); ?>
+                        <div class="product-options flex flex-col space-y-6">
+                            <?php if ($product->is_type('variable')): ?>
+                                <?php foreach ($variation_attributes as $attribute_name => $options): ?>
+                                    <div class="variation-select">
+                                        <h4 class="text-sm font-medium mb-3"><?php echo wc_attribute_label($attribute_name); ?></h4>
+                                        <div class="flex gap-2">
+                                            <?php
+                                            if (is_array($options)) {
+                                                foreach ($options as $option) {
+                                                    $selected = '';
+                                                    echo '<button type="button" class="variation-option w-12 h-12 rounded-lg border border-gray-300 hover:border-black transition-all duration-200 ' . $selected . '" 
+                                                            data-attribute="' . esc_attr(sanitize_title($attribute_name)) . '" 
+                                                            data-value="' . esc_attr($option) . '">
+                                                            ' . esc_html($option) . '
+                                                        </button>';
+                                                }
+                                            }
+                                            ?>
+                                        </div>
+                                        <input type="hidden" name="<?php echo esc_attr('attribute_' . sanitize_title($attribute_name)); ?>" class="variation-select-input" value="">
+                                    </div>
+                                <?php endforeach; ?>
+                                <input type="hidden" name="variation_id" class="variation_id" value="">
+                            <?php endif; ?>
+
+                            <div class="flex flex-row items-center md:items-end gap-4 md:gap-6">
+                                <div class="quantity-controls-wrapper">
+                                    <?php $this->render_quantity_controls(); ?>
+                                </div>
+
+                                <div class="flex-1 md:flex-none">
+                                    <div class="relative w-full md:w-[180px] cursor-pointer button-wrapper">
+                                        <input type="hidden" name="add-to-cart" value="<?php echo esc_attr($product_id); ?>">
+                                        <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/icons/button-circles.svg" alt="button background" class="w-full">
+                                        <button type="submit" 
+                                                class="add-to-cart-button single_add_to_cart_button absolute inset-0 flex items-center justify-center text-xl md:text-sm text-black font-['PP_Neue_Machina'] uppercase border-none transition-colors duration-300"
+                                                <?php echo $product->is_type('variable') ? 'disabled' : ''; ?>>
+                                            <?php echo esc_html($product->single_add_to_cart_text()); ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Product Tabs -->
+                    <div class="product-tabs mt-8 border-t border-gray-200">
+                        <?php
+                        $tabs = [
+                            'materials' => __('Materials', 'child-hello-elementor'),
+                            'dimensions' => __('Dimensions', 'child-hello-elementor'),
+                            'care' => __('Care instructions', 'child-hello-elementor'),
+                        ];
+
+                        foreach ($tabs as $key => $label) :
+                            $content = $product->get_attribute($key);if ($content) :
+                        ?>
+                            <div class="py-4 border-t border-gray-200">
+                                <button class="flex items-center justify-between w-full text-left" data-tab="<?php echo esc_attr($key); ?>">
+                                    <span class="text-sm font-medium"><?php echo esc_html($label); ?></span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                                <div class="tab-content hidden mt-4" id="tab-<?php echo esc_attr($key); ?>">
+                                    <?php echo wp_kses_post($content); ?>
+                                </div>
+                            </div>
+                        <?php
+                            endif;
+                        endforeach;
+                        ?>
+                    </div>
+                    
+                    <div class="w-full">
+                        <?php echo do_shortcode('[product_accordion]'); ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related Products Section -->
+        <div class="related-products-section container w-full mt-12 md:px-0">
+            <div class="flex flex-col md:flex-row gap-8 md:gap-12 py-8 md:py-12">
+                <div class="w-full md:w-1/2">
+                    <h3 class="text-[#2F2C27] font-['PP_Neue_Machina'] text-4xl md:text-7xl font-normal leading-tight md:leading-[74.6px] uppercase">
+                        Discover Your Other Favorite Hoodie – Limited Edition
+                    </h3>
+                </div>
+
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <?php
+                    $related_products = wc_get_related_products($product->get_id(), 2);
+                    
+                    foreach ($related_products as $related_product_id) :
+                        $related_product = wc_get_product($related_product_id);
+                        if (!$related_product) continue;
+                        
+                        $image = wp_get_attachment_image_src(get_post_thumbnail_id($related_product_id), 'full');
+                    ?>
+                        <div class="flex flex-col gap-4 md:gap-6">
+                            <a href="<?php echo $related_product->get_permalink(); ?>">
+                                <img class="w-full h-auto" src="<?php echo $image[0]; ?>" alt="<?php echo $related_product->get_name(); ?>">
+                            </a>
+
+                            <h3 class="text-[#2F2C27] text-2xl md:text-[36px] font-normal uppercase">
+                                <a href="<?php echo $related_product->get_permalink(); ?>" style="color: #2F2C27" class="text-[#2F2C27] font-['PP_Neue_Machina'] text-2xl md:text-[36px] font-normal uppercase"><?php echo $related_product->get_name(); ?></a>
+                            </h3>
+                            <p class="text-[#2F2C27] font-['PP_Neue_Machina'] text-lg md:text-[24px] font-normal uppercase">
+                                <?php echo $related_product->get_short_description(); ?>
+                            </p>
+                            <span class="text-[#2F2C27] font-['PP_Neue_Machina'] text-2xl md:text-3xl font-normal uppercase">
+                                <?php echo $related_product->get_price(); ?>$
+                            </span>
+                            <div class="flex items-center gap-4 justify-end">
+                                <a href="<?php echo $related_product->get_permalink(); ?>" class="relative w-fit cursor-pointer view-button">
+                                    <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/icons/button-circles.svg" 
+                                         alt="button background" 
+                                         class="w-56">
+                                    <span class="view-button-text absolute inset-0 flex items-center justify-center text-xl text-black uppercase">
+                                        VIEW
+                                    </span>
+                                </a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .variation-option.selected {
+                border-color: black;
+                background-color: #f3f4f6;
+            }
+            .quantity-wrapper input.product-quantity {
+                width: 50px;
+                text-align: center;
+            }
+            .button-wrapper {
+                transition: all 0.3s ease;
+            }
+            .add-to-cart-button {
+                background: transparent !important;
+                transition: all 0.3s ease;
+                border-radius: 100px;
+                outline: none;
+                font-size: 16px!important;
+                color: #2F2C27 !important;
+            }
+            .add-to-cart-button:hover,
+            .add-to-cart-button:focus,
+            .add-to-cart-button:active,
+            .button-wrapper:hover .add-to-cart-button,
+            .button-wrapper:focus-within .add-to-cart-button,
+            .button-wrapper:active .add-to-cart-button {
+                background: transparent !important;
+                color: #2F2C27 !important;
+                outline: none;
+            }
+            .add-to-cart-button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            @media (max-width: 768px) {
+                .view-button-text {
+                    font-size: 16px!important;
+                }
+                .quantity-controls h4 {
+                    display: none;
+                }
+                .quantity-controls {
+                    width: fit-content;
+                }
+                .button-wrapper {
+                    width: 180px;
+                }
+            }
+        </style>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Swiper initialization
+            const swiper = new Swiper('.product-thumbnails', {
+                slidesPerView: 3,
+                spaceBetween: 10,
+                navigation: {
+                    nextEl: '.swiper-button-next',
+                    prevEl: '.swiper-button-prev',
+                },
+                watchOverflow: true,
+                slidesOffsetBefore: 0,
+                slidesOffsetAfter: 0,
+                breakpoints: {
+                    320: {
+                        slidesPerView: 3,
+                        spaceBetween: 10
+                    },
+                    768: {
+                        slidesPerView: 3,
+                        spaceBetween: 10
+                    }
+                }
+            });
+
+            // Thumbnail click handler
+            $('.thumbnail-item').click(function() {
+                var fullImageUrl = $(this).data('full-image');
+                var newImage = $('<img>', {
+                    src: fullImageUrl,
+                    class: 'w-full h-full object-contain main-product-image'
+                });
+                $('.main-image-container').html(newImage);
+            });
+
+            // Quantity controls
+            $('.quantity-controls .minus').click(function(e) {
+                e.preventDefault();
+                var input = $(this).closest('.quantity-controls').find('.quantity-input');
+                var value = parseInt(input.val());
+                if (value > 1) {
+                    input.val(value - 1);
+                }
+            });
+
+            $('.quantity-controls .plus').click(function(e) {
+                e.preventDefault();
+                var input = $(this).closest('.quantity-controls').find('.quantity-input');
+                var value = parseInt(input.val());
+                input.val(value + 1);
+            });
+
+            $('.quantity-input').on('change', function() {
+                var value = parseInt($(this).val());
+                if (value < 1 || isNaN(value)) {
+                    $(this).val(1);
+                }
+            });
+
+            // Variation selection handling
+            $('.variation-option').click(function() {
+                var $this = $(this);
+                var attribute = $this.data('attribute');
+                var value = $this.data('value');
+
+                $this.closest('.variation-select').find('.variation-option').removeClass('selected');
+                $this.addClass('selected');
+
+                $('input[name="attribute_' + attribute + '"]').val(value).trigger('change');
+
+                var variations = {};
+                $('.variation-select-input').each(function() {
+                    variations[$(this).attr('name')] = $(this).val();
+                });
+
+                var variation_id = findMatchingVariation(variations);
+                if (variation_id) {
+                    $('.variation_id').val(variation_id);
+                    $('.single_add_to_cart_button').prop('disabled', false);
+                } else {
+                    $('.variation_id').val('');
+                    $('.single_add_to_cart_button').prop('disabled', true);
+                }
+            });
+
+            // Form submission
+            $('.variations_form').on('submit', function(e) {
+                var $form = $(this);
+                var $button = $form.find('.single_add_to_cart_button');
+                
+                if ($button.is(':disabled')) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Check variations if it's a variable product
+                if ($form.find('.variation_id').length > 0) {
+                    var variation_id = $form.find('.variation_id').val();
+                    if (!variation_id) {
+                        e.preventDefault();
+                        alert('გთხოვთ აირჩიოთ ყველა ვარიაცია');
+                        return false;
+                    }
+                }
+                
+                // ფორმა დასაბმითდება ჩვეულებრივად და გვერდი გადაიტვირთება
+                return true;
+            });
+
+            function findMatchingVariation(selected_attributes) {
+                var variations = <?php echo json_encode($variations); ?>;
+                
+                for (var i = 0; i < variations.length; i++) {
+                    var variation = variations[i];
+                    var attributes = variation.attributes;
+                    var match = true;
+
+                    for (var attr_name in selected_attributes) {
+                        var selected_value = selected_attributes[attr_name];
+                        var variation_value = 'attribute_' + attr_name.replace('attribute_', '');
+                        
+                        if (selected_value && attributes[variation_value] && 
+                            selected_value !== attributes[variation_value]) {
+                            match = false;
+                            break;
+                        }
+                    }
+
+                    if (match) {
+                        return variation.variation_id;
+                    }
+                }
+                return null;
+            }
+
+            // Product tabs
+            $('.product-tabs button').click(function() {
+                var tabId = $(this).data('tab');
+                $('#tab-' + tabId).toggleClass('hidden');
+            });
+        });
+        </script>
+        <?php
+    }
+}
