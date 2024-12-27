@@ -22,7 +22,10 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
     }
 
     public function get_script_depends() {
-        return ['jquery', 'swiper-bundle', 'wc-add-to-cart-variation', 'branch-product-scripts'];
+        if (!wp_script_is('wc-add-to-cart-variation', 'registered')) {
+            wp_register_script('wc-add-to-cart-variation', WC()->plugin_url() . '/assets/js/frontend/add-to-cart-variation.min.js', array('jquery', 'wp-util'), WC_VERSION);
+        }
+        return ['jquery', 'swiper-bundle', 'wc-add-to-cart-variation'];
     }
 
     public function get_style_depends() {
@@ -205,7 +208,7 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
                 border-radius: 20px;
             }
 
-            .quantity-controls .minus:hover, .minus:focus, .plus:hover, .plus:focus {
+            .quantity-controls .minus:hover, .quantity-controls .minus:focus, .quantity-controls .plus:hover, .quantity-controls .plus:focus {
                 color: black;
             }
 
@@ -316,62 +319,365 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
                 }
             }
         </style>
+        <style>
+            .variation-option {
+                position: relative;
+                overflow: hidden;
+                background: transparent;
+                transition: all 0.3s ease;
+                border-color: #E5E7EB;
+                min-width: 80px;
+                text-align: center;
+            }
+
+            .variation-option .option-text {
+                position: relative;
+                z-index: 2;
+                transition: color 0.3s ease;
+                color: #2F2C27;
+            }
+
+            .variation-option::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: #2F2C27;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                z-index: 1;
+            }
+
+            .variation-option:hover {
+                border-color: #2F2C27;
+            }
+
+            .variation-option:hover::before {
+                opacity: 0.05;
+            }
+
+            .variation-option:hover .option-text {
+                color: white;
+            }
+
+            .variation-option.selected {
+                border-color: #2F2C27;
+                background: #2F2C27;
+            }
+
+            .variation-option.selected .option-text {
+                color: white;
+            }
+
+            .variation-option:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                border-color: #E5E7EB;
+            }
+
+            .reset_variations {
+                display: inline-block;
+                margin-top: 0.5rem;
+                font-size: 0.875rem;
+                color: #2F2C27;
+                text-decoration: underline;
+                opacity: 0.7;
+                transition: opacity 0.3s ease;
+            }
+
+            .reset_variations:hover {
+                opacity: 1;
+            }
+
+            .woocommerce-variation-price {
+                margin-bottom: 1rem;
+            }
+
+            .woocommerce-variation-availability {
+                margin-bottom: 1rem;
+                font-size: 0.875rem;
+            }
+
+            .stock.out-of-stock {
+                color: #EF4444;
+            }
+
+            .stock.in-stock {
+                color: #10B981;
+            }
+        </style>
+        <style>
+            .variations select {
+                display: none !important;
+                position: absolute;
+                visibility: hidden;
+                opacity: 0;
+                pointer-events: none;
+                width: 0;
+                height: 0;
+                margin: 0;
+                padding: 0;
+                border: 0;
+            }
+        </style>
+        <style>
+            .variation-option.selected {
+                border-color: black;
+                background-color: #f3f4f6;
+            }
+            .quantity-wrapper input.product-quantity {
+                width: 50px;
+                text-align: center;
+            }
+            .button-wrapper {
+                transition: all 0.3s ease;
+            }
+            .add-to-cart-button {
+                background: transparent !important;
+                transition: all 0.3s ease;
+                border-radius: 100px;
+                outline: none;
+                font-size: 16px!important;
+                color: #2F2C27 !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-family: 'PP Neue Machina' !important;
+                text-transform: uppercase !important;
+                letter-spacing: 0.05em !important;
+                position: absolute !important;
+                inset: 0 !important;
+                cursor: pointer !important;
+            }
+            .add-to-cart-button:hover,
+            .add-to-cart-button:focus,
+            .add-to-cart-button:active,
+            .button-wrapper:hover .add-to-cart-button,
+            .button-wrapper:focus-within .add-to-cart-button,
+            .button-wrapper:active .add-to-cart-button {
+                background: transparent !important;
+                color: #2F2C27 !important;
+                outline: none !important;
+                opacity: 0.9 !important;
+            }
+            .add-to-cart-button:disabled {
+                opacity: 0.5 !important;
+                cursor: not-allowed !important;
+                background: transparent !important;
+            }
+            .button-wrapper img {
+                width: 100% !important;
+                height: auto !important;
+                display: block !important;
+            }
+            @media (max-width: 768px) {
+                .view-button-text {
+                    font-size: 16px!important;
+                }
+                .quantity-controls h4 {
+                    display: none;
+                }
+                .quantity-controls {
+                    width: fit-content;
+                }
+                .button-wrapper {
+                    width: 180px;
+                }
+            }
+        </style>
+        <?php
+        if ($product->is_type('variable')) : ?>
+            <script>
+            jQuery(document).ready(function($) {
+                var $form = $('form.variations_form');
+                var $addToCartButton = $form.find('.single_add_to_cart_button');
+                var $buttonText = $addToCartButton.find('.button-text');
+                var $variationButtons = $('.variation-option');
+                
+                // Initialize variations form
+                $form.wc_variation_form();
+                
+                // Handle variation button clicks
+                $variationButtons.on('click', function(e) {
+                    e.preventDefault();
+                    var $button = $(this);
+                    var attribute = $button.data('attribute');
+                    var value = $button.data('value');
+                    
+                    // Update select input
+                    var $select = $('#' + attribute);
+                    $select.val(value).trigger('change');
+                    
+                    // Update button states
+                    $button.siblings().removeClass('selected');
+                    $button.addClass('selected');
+                });
+
+                // Handle variation change
+                $form.on('found_variation', function(event, variation) {
+                    // Enable add to cart button and update text
+                    $addToCartButton.prop('disabled', false);
+                    $buttonText.text('<?php echo esc_js($product->single_add_to_cart_text()); ?>');
+                    
+                    // Update variation ID
+                    $form.find('input[name="variation_id"]').val(variation.variation_id);
+
+                    // Update price if it exists
+                    if (variation.price_html) {
+                        $('.price').html(variation.price_html);
+                    }
+
+                    // Update stock status
+                    if (!variation.is_in_stock) {
+                        $addToCartButton.prop('disabled', true);
+                        $buttonText.text('<?php esc_html_e('Out of stock', 'woocommerce'); ?>');
+                    }
+                });
+
+                $form.on('hide_variation', function() {
+                    // Disable add to cart button and reset text
+                    $addToCartButton.prop('disabled', true);
+                    $buttonText.text('<?php esc_html_e('Select options', 'woocommerce'); ?>');
+                    $form.find('input[name="variation_id"]').val('');
+                });
+
+                // Reset button when clear selection is triggered
+                $form.on('reset_data', function() {
+                    $variationButtons.removeClass('selected');
+                    $addToCartButton.prop('disabled', true);
+                    $buttonText.text('<?php esc_html_e('Select options', 'woocommerce'); ?>');
+                    $form.find('input[name="variation_id"]').val('');
+                    $('select[name^="attribute_"]').val('');
+                });
+
+                // Handle form submission
+                $form.on('submit', function(e) {
+                    var variation_id = $form.find('input[name="variation_id"]').val();
+                    if (!variation_id || variation_id === '0') {
+                        e.preventDefault();
+                        alert('<?php echo esc_js(__('Please select all product options before adding to cart.', 'woocommerce')); ?>');
+                        return false;
+                    }
+                });
+            });
+            </script>
+        <?php endif; ?>
+        <?php
+        if ($product->is_type('variable')) : ?>
+            <script>
+            jQuery(document).ready(function($) {
+                // Swiper initialization
+                const productThumbnailsSwiper = new Swiper('.product-thumbnails', {
+                    slidesPerView: 3,
+                    spaceBetween: 10,
+                    navigation: {
+                        nextEl: '.swiper-button-next',
+                        prevEl: '.swiper-button-prev',
+                    },
+                    watchOverflow: true,
+                    slidesOffsetBefore: 0,
+                    slidesOffsetAfter: 0,
+                    breakpoints: {
+                        320: {
+                            slidesPerView: 3,
+                            spaceBetween: 10
+                        },
+                        768: {
+                            slidesPerView: 3,
+                            spaceBetween: 10
+                        }
+                    }
+                });
+
+                // Thumbnail click handler
+                $('.thumbnail-item').click(function() {
+                    var fullImageUrl = $(this).data('full-image');
+                    var newImage = $('<img>', {
+                        src: fullImageUrl,
+                        class: 'w-full h-full object-contain main-product-image'
+                    });
+                    $('.main-image-container').html(newImage);
+                });
+
+                // Quantity controls
+                $('.quantity-controls .minus').on('click', function(e) {
+                    e.preventDefault();
+                    var input = $(this).closest('.quantity-controls').find('.quantity-input');
+                    var value = parseInt(input.val());
+                    if (value > 1) {
+                        input.val(value - 1);
+                    }
+                });
+
+                $('.quantity-controls .plus').on('click', function(e) {
+                    e.preventDefault();
+                    var input = $(this).closest('.quantity-controls').find('.quantity-input');
+                    var value = parseInt(input.val());
+                    input.val(value + 1);
+                });
+
+                $('.quantity-input').on('change', function() {
+                    var value = parseInt($(this).val());
+                    if (value < 1 || isNaN(value)) {
+                        $(this).val(1);
+                    }
+                });
+
+                // Product tabs
+                $('.product-tabs button').on('click', function() {
+                    var tabId = $(this).data('tab');
+                    $('#tab-' + tabId).toggleClass('hidden');
+                });
+            });
+            </script>
+        <?php endif; ?>
         <?php
     }
 
     protected function render_product_gallery($product) {
-        $featured_image_id = $product->get_image_id();
-        $gallery_image_ids = $product->get_gallery_image_ids();
         ?>
         <div class="w-full md:w-1/2 relative">
             <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/images/corner-design.svg" 
                  alt="" 
                  class="absolute -top-16 -left-8 z-10 w-48 pointer-events-none">
             
-            <?php if ($featured_image_id): ?>
-                <div class="main-image-container" style="max-height: 600px; height: 600px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                    <?php 
-                    echo wp_get_attachment_image(
-                        $featured_image_id, 
-                        'full', 
-                        false, 
-                        ['class' => 'w-full h-full object-contain main-product-image']
-                    ); 
-                    ?>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($gallery_image_ids): ?>
-                <div class="swiper product-thumbnails">
-                    <div class="swiper-wrapper">
-                        <?php
-                        if ($featured_image_id) {
-                            $this->render_thumbnail_slide($featured_image_id);
-                        }
-                        foreach ($gallery_image_ids as $attachment_id) {
-                            $this->render_thumbnail_slide($attachment_id);
-                        }
-                        ?>
-                    </div>
-                    <div class="swiper-button-next !-right-1"></div>
-                    <div class="swiper-button-prev !-left-1"></div>
-                </div>
-            <?php endif; ?>
-        </div>
-        <?php
-    }
-
-    protected function render_thumbnail_slide($attachment_id) {
-        $full_image_url = wp_get_attachment_image_url($attachment_id, 'full');
-        ?>
-        <div class="swiper-slide thumbnail-item" data-full-image="<?php echo esc_attr($full_image_url); ?>">
-            <?php 
-            echo wp_get_attachment_image(
-                $attachment_id, 
-                'large', 
-                false, 
-                ['class' => 'w-full h-full object-cover cursor-pointer']
-            ); 
+            <?php
+            $attachment_ids = $product->get_gallery_image_ids();
+            $featured_image_id = $product->get_image_id();
+            
+            if ($featured_image_id) {
+                echo '<div class="main-image-container" style="max-height: 600px; height: 600px; display: flex; align-items: center; justify-content: center; overflow: hidden;">';
+                echo wp_get_attachment_image($featured_image_id, 'full', false, ['class' => 'w-full h-full object-contain main-product-image']);
+                echo '</div>';
+            }
+            
+            if ($attachment_ids) {
+                echo '<div class="swiper product-thumbnails">';
+                echo '<div class="swiper-wrapper">';
+                if ($featured_image_id) {
+                    $full_image_url = wp_get_attachment_image_url($featured_image_id, 'full');
+                    echo '<div class="swiper-slide thumbnail-item" data-full-image="' . esc_attr($full_image_url) . '">';
+                    echo wp_get_attachment_image($featured_image_id, 'large', false, ['class' => 'w-full h-full object-cover cursor-pointer']);
+                    echo '</div>';
+                }
+                foreach ($attachment_ids as $attachment_id) {
+                    $full_image_url = wp_get_attachment_image_url($attachment_id, 'full');
+                    echo '<div class="swiper-slide thumbnail-item" data-full-image="' . esc_attr($full_image_url) . '">';
+                    echo wp_get_attachment_image($attachment_id, 'large', false, ['class' => 'w-full h-full object-cover cursor-pointer']);
+                    echo '</div>';
+                }
+                echo '</div>';
+                echo '<div class="swiper-button-next !-right-1"></div>';
+                echo '<div class="swiper-button-prev !-left-1"></div>';
+                echo '</div>';
+            }
             ?>
         </div>
         <?php
@@ -400,185 +706,336 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
         <?php
     }
 
-    protected function get_variations_data($product) {
-        if (!$product->is_type('variable')) {
-            return [
-                'variations' => [],
-                'attributes' => []
-            ];
-        }
-
-        $variations = $product->get_available_variations();
-        $attributes = $product->get_variation_attributes();
-        
-        $processed_variations = [];
-        foreach ($variations as $variation) {
-            $variation_obj = wc_get_product($variation['variation_id']);
-            $processed_variation = [
-                'variation_id' => $variation['variation_id'],
-                'display_price' => $variation['display_price'],
-                'display_regular_price' => $variation['display_regular_price'],
-                'is_in_stock' => $variation['is_in_stock'],
-                'attributes' => [],
-                'image' => $variation['image'],
-                'sku' => $variation_obj->get_sku()
-            ];
-
-            foreach ($variation['attributes'] as $key => $value) {
-                $attribute_name = str_replace('attribute_', '', $key);
-                $processed_variation['attributes'][$attribute_name] = $value;
-            }
-
-            $processed_variations[] = $processed_variation;
-        }
-
-        // Process available attributes
-        $processed_attributes = [];
-        foreach ($attributes as $attribute_name => $options) {
-            $processed_attributes[$attribute_name] = [
-                'name' => wc_attribute_label($attribute_name),
-                'options' => $options,
-                'default' => $product->get_variation_default_attribute($attribute_name)
-            ];
-        }
-
-        return [
-            'variations' => $processed_variations,
-            'attributes' => $processed_attributes
-        ];
-    }
-
     protected function render_add_to_cart_form($product) {
-        $variations_data = $this->get_variations_data($product);
         ?>
-        <form class="variations_form cart" method="post" enctype="multipart/form-data" data-product_id="<?php echo esc_attr($product->get_id()); ?>">
-            <?php if ($product->is_type('variable')) : ?>
-                <div class="variations">
-                    <?php 
-                    // Get the attribute taxonomies in their original order
-                    $attribute_taxonomies = wc_get_attribute_taxonomies();
-                    $ordered_attributes = array();
-                    
-                    // First, add taxonomy-based attributes in their defined order
-                    foreach ($attribute_taxonomies as $tax) {
-                        $taxonomy = wc_attribute_taxonomy_name($tax->attribute_name);
-                        if ($product->get_variation_attributes() && array_key_exists($taxonomy, $product->get_variation_attributes())) {
-                            $ordered_attributes[$taxonomy] = $product->get_variation_attributes()[$taxonomy];
-                        }
-                    }
-                    
-                    // Then add any custom product attributes
-                    foreach ($product->get_variation_attributes() as $attribute_name => $options) {
-                        if (!array_key_exists($attribute_name, $ordered_attributes)) {
-                            $ordered_attributes[$attribute_name] = $options;
-                        }
-                    }
+        <form class="cart variations_form" 
+              method="post" 
+              enctype="multipart/form-data"
+              <?php if ($product->is_type('variable')): ?>
+              data-product_id="<?php echo absint($product->get_id()); ?>"
+              data-product_variations="<?php echo htmlspecialchars(wp_json_encode($product->get_available_variations())); ?>"
+              <?php endif; ?>>
 
-                    foreach ($ordered_attributes as $attribute_name => $options) : 
-                        $attribute_label = wc_attribute_label($attribute_name);
-                    ?>
-                        <div class="variation-row mb-6">
-                            <div class="label mb-2">
-                                <label for="<?php echo esc_attr(sanitize_title($attribute_name)); ?>" class="text-base uppercase">
-                                    <?php echo esc_html($attribute_label); ?>
-                                </label>
-                            </div>
-                            <div class="value">
-                                <div class="variation-select flex flex-wrap gap-2">
-                                    <?php
-                                    $selected = isset($_REQUEST['attribute_' . sanitize_title($attribute_name)]) 
+            <?php if ($product->is_type('variable')) : ?>
+                <?php $attributes = $product->get_variation_attributes(); ?>
+                <div class="variations mb-6">
+                    <?php foreach ($attributes as $attribute_name => $options) : ?>
+                        <div class="variation-row mb-4">
+                            <label for="<?php echo esc_attr(sanitize_title($attribute_name)); ?>" class="text-base uppercase mb-2 block">
+                                <?php echo wc_attribute_label($attribute_name); ?>
+                            </label>
+                            <div class="variation-buttons flex flex-wrap gap-2">
+                                <?php
+                                if (is_array($options)) {
+                                    $selected_value = isset($_REQUEST['attribute_' . sanitize_title($attribute_name)]) 
                                         ? wc_clean(wp_unslash($_REQUEST['attribute_' . sanitize_title($attribute_name)])) 
                                         : $product->get_variation_default_attribute($attribute_name);
 
-                                    // Get the terms in the correct order if it's a taxonomy
                                     if (taxonomy_exists($attribute_name)) {
-                                        $terms = wc_get_product_terms(
-                                            $product->get_id(),
-                                            $attribute_name,
-                                            array('fields' => 'all')
-                                        );
-                                        
-                                        $options = array();
+                                        $terms = wc_get_product_terms($product->get_id(), $attribute_name, array('fields' => 'all'));
                                         foreach ($terms as $term) {
-                                            if (in_array($term->slug, $product->get_variation_attributes()[$attribute_name])) {
-                                                $options[] = $term;
+                                            if (!in_array($term->slug, $options)) {
+                                                continue;
+                                            }
+                                            $selected = ($selected_value === $term->slug) ? ' selected' : '';
+                                            ?>
+                                            <button type="button" 
+                                                    class="variation-option px-4 py-2 border rounded-full<?php echo esc_attr($selected); ?>"
+                                                    data-attribute="<?php echo esc_attr(sanitize_title($attribute_name)); ?>"
+                                                    data-value="<?php echo esc_attr($term->slug); ?>">
+                                                <span class="option-text"><?php echo esc_html($term->name); ?></span>
+                                            </button>
+                                            <?php
+                                        }
+                                    } else {
+                                        foreach ($options as $option) {
+                                            $selected = ($selected_value === $option) ? ' selected' : '';
+                                            ?>
+                                            <button type="button" 
+                                                    class="variation-option px-4 py-2 border rounded-full<?php echo esc_attr($selected); ?>"
+                                                    data-attribute="<?php echo esc_attr(sanitize_title($attribute_name)); ?>"
+                                                    data-value="<?php echo esc_attr($option); ?>">
+                                                <span class="option-text"><?php echo esc_html($option); ?></span>
+                                            </button>
+                                            <?php
+                                        }
+                                    }
+                                }
+                                ?>
+                                <select id="<?php echo esc_attr(sanitize_title($attribute_name)); ?>"
+                                        class="hidden !hidden"
+                                        style="display: none !important; visibility: hidden;"
+                                        name="attribute_<?php echo esc_attr(sanitize_title($attribute_name)); ?>"
+                                        data-attribute_name="attribute_<?php echo esc_attr(sanitize_title($attribute_name)); ?>">
+                                    <option value=""><?php echo esc_html__('Choose an option', 'woocommerce'); ?></option>
+                                    <?php
+                                    if (is_array($options)) {
+                                        if (taxonomy_exists($attribute_name)) {
+                                            foreach ($terms as $term) {
+                                                if (!in_array($term->slug, $options)) {
+                                                    continue;
+                                                }
+                                                echo '<option value="' . esc_attr($term->slug) . '" ' . selected($selected_value, $term->slug, false) . '>' . esc_html($term->name) . '</option>';
+                                            }
+                                        } else {
+                                            foreach ($options as $option) {
+                                                echo '<option value="' . esc_attr($option) . '" ' . selected($selected_value, $option, false) . '>' . esc_html($option) . '</option>';
                                             }
                                         }
                                     }
-                                    
-                                    foreach ($options as $option) : 
-                                        $option_value = is_object($option) ? $option->slug : $option;
-                                        $option_name = is_object($option) ? $option->name : $option;
-                                        $selected_class = ($selected === $option_value) ? ' selected' : '';
                                     ?>
-                                        <button type="button" 
-                                                class="variation-option border border-black px-4 py-2 rounded-full<?php echo esc_attr($selected_class); ?>" 
-                                                data-attribute="<?php echo esc_attr(sanitize_title($attribute_name)); ?>" 
-                                                data-value="<?php echo esc_attr($option_value); ?>">
-                                            <span class="option-text"><?php echo esc_html($option_name); ?></span>
-                                        </button>
-                                    <?php endforeach; ?>
-                                    <input type="hidden" 
-                                           name="attribute_<?php echo esc_attr(sanitize_title($attribute_name)); ?>" 
-                                           class="variation-select-input" 
-                                           value="<?php echo esc_attr($selected); ?>">
-                                </div>
+                                </select>
                             </div>
                         </div>
                     <?php endforeach; ?>
+                    <div class="reset-variations-wrapper mt-2">
+                        <a class="reset_variations hidden" href="#"><?php esc_html_e('Clear selection', 'woocommerce'); ?></a>
+                    </div>
                 </div>
-                <input type="hidden" name="variation_id" class="variation_id" value="">
-            <?php endif; ?>
 
-            <div class="single_variation_wrap">
-                <div class="woocommerce-variation single_variation"></div>
-                <div class="woocommerce-variation-add-to-cart variations_button">
-                    <?php if ($product->is_in_stock()) : ?>
-                        <div class="flex flex-row items-center md:items-end gap-4 md:gap-6">
-                            <!-- Quantity Controls -->
-                            <div class="quantity-wrapper">
-                                <h4 class="text-base mb-2">QUANTITY</h4>
-                                <div class="quantity">
-                                    <button type="button" class="minus">-</button>
-                                    <input type="number" 
-                                           name="quantity"
-                                           class="product-quantity" 
-                                           value="1" 
-                                           min="1">
-                                    <button type="button" class="plus">+</button>
-                                </div>
-                            </div>
+                <div class="single_variation_wrap">
+                    <div class="woocommerce-variation single_variation"></div>
+                    <div class="woocommerce-variation-add-to-cart variations_button">
+                        <?php if ($product->is_in_stock()) : ?>
+                            <div class="flex flex-row items-center md:items-end gap-4 md:gap-6">
+                                <?php $this->render_quantity_controls(); ?>
 
-                            <!-- Add to Cart Button -->
-                            <div class="flex-1 md:flex-none">
-                                <div class="relative w-full md:w-[180px] cursor-pointer button-wrapper">
-                                    <input type="hidden" name="add-to-cart" value="<?php echo esc_attr($product->get_id()); ?>">
-                                    <?php if ($product->is_type('variable')): ?>
+                                <div class="flex-1 md:flex-none">
+                                    <div class="relative w-full md:w-[180px] cursor-pointer button-wrapper">
+                                        <input type="hidden" name="add-to-cart" value="<?php echo esc_attr($product->get_id()); ?>">
                                         <input type="hidden" name="product_id" value="<?php echo esc_attr($product->get_id()); ?>">
-                                    <?php endif; ?>
-                                    <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/icons/button-circles.svg" 
-                                         alt="button background" 
-                                         class="w-full button-bg">
-                                    <button type="submit" 
-                                            class="add-to-cart-button single_add_to_cart_button absolute inset-0 flex items-center justify-center text-xl md:text-sm text-black font-['PP_Neue_Machina'] uppercase border-none transition-all duration-300 <?php echo $product->is_type('variable') ? 'disabled' : ''; ?>"
-                                            <?php echo $product->is_type('variable') ? 'disabled' : ''; ?>>
-                                        <?php echo esc_html($product->single_add_to_cart_text()); ?>
-                                    </button>
+                                        <input type="hidden" name="variation_id" class="variation_id" value="0">
+                                        
+                                        <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/icons/button-circles.svg" 
+                                             alt="button background" 
+                                             class="w-full button-bg">
+                                        <button type="submit" 
+                                                class="add-to-cart-button single_add_to_cart_button button alt absolute inset-0 flex items-center justify-center text-xl md:text-sm text-black font-['PP_Neue_Machina'] uppercase border-none transition-all duration-300"
+                                                disabled>
+                                            <span class="button-text"><?php esc_html_e('Select options', 'woocommerce'); ?></span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php else : ?>
-                        <p class="stock out-of-stock">
-                            <?php echo esc_html($product->get_stock_status_text()); ?>
-                        </p>
-                    <?php endif; ?>
+                        <?php else : ?>
+                            <p class="stock out-of-stock">
+                                <?php echo esc_html($product->get_stock_status_text()); ?>
+                            </p>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            </div>
-        </form>
 
-        <script type="text/javascript">
-            var productVariations = <?php echo wp_json_encode($variations_data); ?>;
+                <script>
+                jQuery(document).ready(function($) {
+                    var $form = $('form.variations_form');
+                    var $addToCartButton = $form.find('.single_add_to_cart_button');
+                    var $buttonText = $addToCartButton.find('.button-text');
+                    var $variationButtons = $('.variation-option');
+                    
+                    // Initialize variations form
+                    $form.wc_variation_form();
+                    
+                    // Handle variation button clicks
+                    $variationButtons.on('click', function(e) {
+                        e.preventDefault();
+                        var $button = $(this);
+                        var attribute = $button.data('attribute');
+                        var value = $button.data('value');
+                        
+                        // Update select input
+                        var $select = $('#' + attribute);
+                        $select.val(value).trigger('change');
+                        
+                        // Update button states
+                        $button.siblings().removeClass('selected');
+                        $button.addClass('selected');
+                    });
+
+                    // Handle variation change
+                    $form.on('found_variation', function(event, variation) {
+                        // Enable add to cart button and update text
+                        $addToCartButton.prop('disabled', false);
+                        $buttonText.text('<?php echo esc_js($product->single_add_to_cart_text()); ?>');
+                        
+                        // Update variation ID
+                        $form.find('input[name="variation_id"]').val(variation.variation_id);
+
+                        // Update price if it exists
+                        if (variation.price_html) {
+                            $('.price').html(variation.price_html);
+                        }
+
+                        // Update stock status
+                        if (!variation.is_in_stock) {
+                            $addToCartButton.prop('disabled', true);
+                            $buttonText.text('<?php esc_html_e('Out of stock', 'woocommerce'); ?>');
+                        }
+                    });
+
+                    $form.on('hide_variation', function() {
+                        // Disable add to cart button and reset text
+                        $addToCartButton.prop('disabled', true);
+                        $buttonText.text('<?php esc_html_e('Select options', 'woocommerce'); ?>');
+                        $form.find('input[name="variation_id"]').val('');
+                    });
+
+                    // Reset button when clear selection is triggered
+                    $form.on('reset_data', function() {
+                        $variationButtons.removeClass('selected');
+                        $addToCartButton.prop('disabled', true);
+                        $buttonText.text('<?php esc_html_e('Select options', 'woocommerce'); ?>');
+                        $form.find('input[name="variation_id"]').val('');
+                        $('select[name^="attribute_"]').val('');
+                    });
+
+                    // Handle form submission
+                    $form.on('submit', function(e) {
+                        var variation_id = $form.find('input[name="variation_id"]').val();
+                        if (!variation_id || variation_id === '0') {
+                            e.preventDefault();
+                            alert('<?php echo esc_js(__('Please select all product options before adding to cart.', 'woocommerce')); ?>');
+                            return false;
+                        }
+                    });
+                });
+                </script>
+            <?php else: ?>
+                <div class="flex flex-row items-center md:items-end gap-4 md:gap-6">
+                    <?php $this->render_quantity_controls(); ?>
+
+                    <div class="flex-1 md:flex-none">
+                        <div class="relative w-full md:w-[180px] cursor-pointer button-wrapper">
+                            <input type="hidden" name="add-to-cart" value="<?php echo esc_attr($product->get_id()); ?>">
+                            <img src="<?php echo get_stylesheet_directory_uri(); ?>/assets/icons/button-circles.svg" 
+                                 alt="button background" 
+                                 class="w-full button-bg">
+                            <button type="submit" 
+                                    class="add-to-cart-button single_add_to_cart_button absolute inset-0 flex items-center justify-center text-xl md:text-sm text-black font-['PP_Neue_Machina'] uppercase border-none transition-all duration-300">
+                                <?php echo esc_html($product->single_add_to_cart_text()); ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </form>
+        <?php
+    }
+
+    protected function render_quantity_controls() {
+        ?>
+        <div class="quantity-controls">
+            <h4 class="text-base mb-2">QUANTITY</h4>
+            <div class="flex items-center border border-[#E5E7EB] rounded-full w-fit">
+                <button type="button" class="minus px-4 py-2 text-lg font-semibold hover:bg-gray-100 rounded-l-full"
+                        style="background: none; border-right: 1px solid #E5E7EB;">
+                    -
+                </button>
+                <div class="quantity">
+                    <input type="number" 
+                           name="quantity"
+                           class="product-quantity quantity-input w-12 text-center border-none focus:outline-none" 
+                           value="1" 
+                           min="1"
+                           style="-moz-appearance: textfield;">
+                </div>
+                <button type="button" class="plus px-4 py-2 text-lg font-semibold hover:bg-gray-100 rounded-r-full"
+                        style="background: none; border-left: 1px solid #E5E7EB;">
+                    +
+                </button>
+            </div>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Quantity controls
+            $('.quantity-controls .minus').on('click', function(e) {
+                e.preventDefault();
+                var input = $(this).closest('.quantity-controls').find('.product-quantity');
+                var value = parseInt(input.val());
+                if (value > 1) {
+                    input.val(value - 1);
+                }
+            });
+
+            $('.quantity-controls .plus').on('click', function(e) {
+                e.preventDefault();
+                var input = $(this).closest('.quantity-controls').find('.product-quantity');
+                var value = parseInt(input.val());
+                input.val(value + 1);
+            });
+
+            $('.product-quantity').on('change', function() {
+                var value = parseInt($(this).val());
+                if (value < 1 || isNaN(value)) {
+                    $(this).val(1);
+                }
+            });
+        });
         </script>
+
+        <style>
+            .quantity-controls {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .quantity-controls .quantity {
+                border: none!important;
+                background: #fef9f3!important;
+            }
+
+            .quantity-controls input {
+                width: 32px;
+                height: 32px;
+                text-align: center;
+                border: none;
+                font-size: 14px;
+                padding: 0;
+                margin: 0;
+                -moz-appearance: textfield;
+                background: none!important;
+            }
+
+            .quantity-controls input::-webkit-outer-spin-button,
+            .quantity-controls input::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+
+            .quantity-controls button {
+                width: 32px;
+                height: 32px;
+                border: none;
+                background: none;
+                cursor: pointer;
+                font-size: 16px;
+                color: #2F2C27;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .quantity-controls button:hover {
+                background: #f5f5f5;
+                border-radius: 20px;
+            }
+
+            .quantity-controls .minus:hover,
+            .quantity-controls .minus:focus,
+            .quantity-controls .plus:hover,
+            .quantity-controls .plus:focus {
+                color: black;
+            }
+
+            @media (max-width: 768px) {
+                .quantity-controls h4 {
+                    display: none;
+                }
+                .quantity-controls {
+                    width: fit-content;
+                }
+            }
+        </style>
         <?php
     }
 

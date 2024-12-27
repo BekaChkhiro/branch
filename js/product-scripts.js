@@ -3,242 +3,133 @@
 
     class BranchProductHandler {
         constructor() {
-            this.form = $('form.variations_form');
+            this.form = $('.variations_form');
             this.addToCartButton = $('.single_add_to_cart_button');
-            this.variationData = typeof productVariations !== 'undefined' ? productVariations : [];
-            this.selectedAttributes = {};
+            this.variationContainer = $('.single_variation');
+            this.mainImage = $('.main-product-image');
             
-            this.initializeSwiper();
-            this.initializeQuantityControls();
             this.initializeVariationHandling();
+            this.initializeQuantityControls();
             this.initializeAccordion();
-            this.initializeAjaxAddToCart();
-        }
-
-        initializeSwiper() {
-            new Swiper('.product-thumbnails', {
-                slidesPerView: 3,
-                spaceBetween: 10,
-                navigation: {
-                    nextEl: '.swiper-button-next',
-                    prevEl: '.swiper-button-prev',
-                },
-                watchOverflow: true,
-                breakpoints: {
-                    320: {
-                        slidesPerView: 3,
-                        spaceBetween: 10
-                    },
-                    768: {
-                        slidesPerView: 3,
-                        spaceBetween: 10
-                    }
-                }
-            });
-
-            // Thumbnail click handler
-            $('.thumbnail-item').on('click', function() {
-                const fullImageUrl = $(this).data('full-image');
-                const newImage = $('<img>', {
-                    src: fullImageUrl,
-                    class: 'w-full h-full object-contain main-product-image'
-                });
-                $('.main-image-container').html(newImage);
-            });
-        }
-
-        initializeQuantityControls() {
-            $('.minus').on('click', function(e) {
-                e.preventDefault();
-                const input = $(this).closest('.quantity').find('input.product-quantity');
-                const value = parseInt(input.val());
-                if (value > 1) {
-                    input.val(value - 1).trigger('change');
-                }
-            });
-
-            $('.plus').on('click', function(e) {
-                e.preventDefault();
-                const input = $(this).closest('.quantity').find('input.product-quantity');
-                const value = parseInt(input.val());
-                input.val(value + 1).trigger('change');
-            });
-
-            $('input.product-quantity').on('change', function() {
-                let value = parseInt($(this).val());
-                if (value < 1 || isNaN(value)) {
-                    $(this).val(1);
-                }
-            });
         }
 
         initializeVariationHandling() {
             if (!this.form.length) return;
 
-            // Handle variation selection
-            $('.variation-option').on('click', (e) => {
+            // Initialize WooCommerce variation form
+            this.form.wc_variation_form();
+
+            // Handle our custom variation buttons
+            this.form.on('click', '.variation-option', (e) => {
                 e.preventDefault();
-                const $this = $(e.currentTarget);
-                const attribute = $this.data('attribute');
-                const value = $this.data('value');
+                const $target = $(e.currentTarget);
+                const attribute = $target.data('attribute');
+                const value = $target.data('value');
 
                 // Update visual selection
-                $this.closest('.variation-select').find('.variation-option').removeClass('selected');
-                $this.addClass('selected');
+                $target.closest('.variation-row').find('.variation-option').removeClass('selected');
+                $target.addClass('selected');
 
-                // Update hidden input
-                const inputName = `attribute_${attribute}`;
-                $(`input[name="${inputName}"]`).val(value).trigger('change');
-
-                // Update selected attributes
-                this.selectedAttributes[attribute] = value;
-
-                // Check if all attributes are selected
-                const allAttributesSelected = this.checkAllAttributesSelected();
-
-                if (allAttributesSelected) {
-                    // Find matching variation
-                    const matchedVariation = this.findMatchingVariation();
-                    if (matchedVariation) {
-                        this.updateVariationInfo(matchedVariation);
-                    } else {
-                        this.showUnavailableMessage();
-                    }
-                } else {
-                    this.resetVariationForm();
-                }
+                // Update hidden input and trigger WooCommerce's change event
+                $(`input[name="attribute_${attribute}"]`).val(value).trigger('change');
             });
 
-            // Initialize default selections
-            this.initializeDefaultAttributes();
+            // Listen to WooCommerce's variation events
+            this.form.on('found_variation', (event, variation) => {
+                this.updateVariationDisplay(variation);
+            });
+
+            this.form.on('reset_data', () => {
+                this.resetVariationDisplay();
+            });
+
+            this.form.on('hide_variation', () => {
+                this.hideVariation();
+            });
+
+            this.form.on('show_variation', (event, variation) => {
+                this.showVariation(variation);
+            });
         }
 
-        checkAllAttributesSelected() {
-            if (!this.variationData.attributes) return false;
-            
-            return Object.keys(this.variationData.attributes).every(
-                attribute => this.selectedAttributes[attribute]
-            );
-        }
+        updateVariationDisplay(variation) {
+            if (!variation) return;
 
-        updateVariationInfo(variation) {
             // Update price
             if (variation.display_price !== undefined) {
-                const priceHtml = this.formatPrice(variation.display_price);
-                $('.single_variation').html(`<div class="woocommerce-variation-price">${priceHtml}</div>`);
+                this.variationContainer.find('.woocommerce-variation-price').html(variation.price_html);
             }
 
-            // Update stock status
-            if (variation.is_in_stock) {
-                this.addToCartButton.prop('disabled', false).removeClass('disabled');
-                $('.single_variation').find('.stock').remove();
+            // Update availability
+            if (variation.is_in_stock && variation.is_purchasable) {
+                this.addToCartButton
+                    .prop('disabled', false)
+                    .removeClass('disabled')
+                    .text('Add to Cart');
             } else {
-                this.addToCartButton.prop('disabled', true).addClass('disabled');
-                $('.single_variation').append('<p class="stock out-of-stock">Out of stock</p>');
+                this.addToCartButton
+                    .prop('disabled', true)
+                    .addClass('disabled')
+                    .text('Unavailable');
             }
 
-            // Update variation ID
-            $('.variation_id').val(variation.variation_id);
-
-            // Update product image if available
+            // Update image if available
             if (variation.image && variation.image.full_src) {
-                $('.main-product-image').attr('src', variation.image.full_src);
+                this.mainImage.attr('src', variation.image.full_src);
             }
-
-            // Clear any previous error messages
-            $('.single_variation').find('.woocommerce-variation-unavailable').remove();
-
-            // Trigger WooCommerce variation found event
-            this.form.trigger('found_variation', [variation]);
         }
 
-        showUnavailableMessage() {
-            this.resetVariationForm();
-            $('.single_variation').html(
-                '<div class="woocommerce-variation-unavailable">' +
-                '<p class="stock out-of-stock">Sorry, this product is unavailable. Please choose a different combination.</p>' +
-                '</div>'
-            );
+        resetVariationDisplay() {
+            this.addToCartButton
+                .prop('disabled', true)
+                .addClass('disabled')
+                .text('Select Options');
+            
+            this.variationContainer.empty();
         }
 
-        resetVariationForm() {
-            $('.variation_id').val('');
-            this.addToCartButton.prop('disabled', true).addClass('disabled');
-            $('.single_variation').find('.woocommerce-variation-price, .stock').remove();
+        hideVariation() {
+            this.variationContainer.hide();
+            this.addToCartButton
+                .prop('disabled', true)
+                .addClass('disabled');
         }
 
-        findMatchingVariation() {
-            if (!this.variationData.variations) return null;
+        showVariation(variation) {
+            this.variationContainer.show();
+            this.updateVariationDisplay(variation);
+        }
 
-            return this.variationData.variations.find(variation => {
-                return Object.entries(variation.attributes).every(([name, value]) => {
-                    const selectedValue = this.selectedAttributes[name];
-                    // Check if the variation attribute is not empty and matches the selected value
-                    return !value || value === selectedValue;
-                });
+        initializeQuantityControls() {
+            const quantityWrapper = $('.quantity-wrapper');
+            const quantityInput = quantityWrapper.find('.quantity-input');
+            const minusBtn = quantityWrapper.find('.quantity-minus');
+            const plusBtn = quantityWrapper.find('.quantity-plus');
+            
+            minusBtn.on('click', () => {
+                let value = parseInt(quantityInput.val()) || 1;
+                value = Math.max(1, value - 1);
+                quantityInput.val(value).trigger('change');
             });
-        }
-
-        initializeDefaultAttributes() {
-            if (!this.variationData.attributes) return;
-
-            Object.entries(this.variationData.attributes).forEach(([attribute, data]) => {
-                if (data.default) {
-                    const $option = $(`.variation-option[data-attribute="${attribute}"][data-value="${data.default}"]`);
-                    if ($option.length) {
-                        $option.trigger('click');
-                    }
-                }
+            
+            plusBtn.on('click', () => {
+                let value = parseInt(quantityInput.val()) || 1;
+                value++;
+                quantityInput.val(value).trigger('change');
             });
-        }
-
-        formatPrice(price) {
-            return `<span class="price"><span class="woocommerce-Price-amount amount">
-                <bdi><span class="woocommerce-Price-currencySymbol">$</span>${price.toFixed(2)}</bdi></span></span>`;
+            
+            quantityInput.on('change', function() {
+                let value = parseInt($(this).val()) || 1;
+                value = Math.max(1, value);
+                $(this).val(value);
+            });
         }
 
         initializeAccordion() {
             $('.product-tabs button').on('click', function() {
                 const tabId = $(this).data('tab');
-                $(`#tab-${tabId}`).slideToggle();
+                $(`#${tabId}`).slideToggle();
                 $(this).find('svg').toggleClass('rotate-180');
-            });
-        }
-
-        initializeAjaxAddToCart() {
-            this.form.on('submit', (e) => {
-                e.preventDefault();
-                
-                if (this.addToCartButton.hasClass('disabled')) {
-                    return false;
-                }
-
-                const formData = new FormData(this.form[0]);
-                formData.append('action', 'woocommerce_ajax_add_to_cart');
-
-                $.ajax({
-                    type: 'POST',
-                    url: wc_add_to_cart_params.wc_ajax_url.toString().replace('%%endpoint%%', 'add_to_cart'),
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: (response) => {
-                        if (!response.error) {
-                            $(document.body).trigger('added_to_cart', [
-                                response.fragments,
-                                response.cart_hash,
-                                this.addToCartButton
-                            ]);
-                        } else {
-                            window.alert(response.message || 'Error adding to cart');
-                        }
-                    },
-                    error: () => {
-                        window.alert('Error occurred while adding to cart. Please try again.');
-                    }
-                });
-
-                return false;
             });
         }
     }
