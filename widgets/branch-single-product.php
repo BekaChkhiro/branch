@@ -287,6 +287,20 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
                 cursor: not-allowed;
             }
 
+            .woocommerce-variation-unavailable {
+                margin: 1rem 0;
+            }
+
+            .woocommerce-variation-unavailable .stock.out-of-stock {
+                color: #e2401c;
+                font-weight: 500;
+                font-size: 0.875rem;
+            }
+
+            .single_variation {
+                margin-bottom: 1rem;
+            }
+
             @media (max-width: 768px) {
                 .view-button-text {
                     font-size: 16px!important;
@@ -388,7 +402,10 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
 
     protected function get_variations_data($product) {
         if (!$product->is_type('variable')) {
-            return [];
+            return [
+                'variations' => [],
+                'attributes' => []
+            ];
         }
 
         $variations = $product->get_available_variations();
@@ -396,18 +413,38 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
         
         $processed_variations = [];
         foreach ($variations as $variation) {
-            $processed_attributes = [];
+            $variation_obj = wc_get_product($variation['variation_id']);
+            $processed_variation = [
+                'variation_id' => $variation['variation_id'],
+                'display_price' => $variation['display_price'],
+                'display_regular_price' => $variation['display_regular_price'],
+                'is_in_stock' => $variation['is_in_stock'],
+                'attributes' => [],
+                'image' => $variation['image'],
+                'sku' => $variation_obj->get_sku()
+            ];
+
             foreach ($variation['attributes'] as $key => $value) {
-                $key = str_replace('attribute_', '', $key);
-                $processed_attributes[$key] = $value;
+                $attribute_name = str_replace('attribute_', '', $key);
+                $processed_variation['attributes'][$attribute_name] = $value;
             }
-            $variation['attributes'] = $processed_attributes;
-            $processed_variations[] = $variation;
+
+            $processed_variations[] = $processed_variation;
+        }
+
+        // Process available attributes
+        $processed_attributes = [];
+        foreach ($attributes as $attribute_name => $options) {
+            $processed_attributes[$attribute_name] = [
+                'name' => wc_attribute_label($attribute_name),
+                'options' => $options,
+                'default' => $product->get_variation_default_attribute($attribute_name)
+            ];
         }
 
         return [
             'variations' => $processed_variations,
-            'attributes' => $attributes
+            'attributes' => $processed_attributes
         ];
     }
 
@@ -417,28 +454,68 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
         <form class="variations_form cart" method="post" enctype="multipart/form-data" data-product_id="<?php echo esc_attr($product->get_id()); ?>">
             <?php if ($product->is_type('variable')) : ?>
                 <div class="variations">
-                    <?php foreach ($product->get_variation_attributes() as $attribute_name => $options) : ?>
-                        <div class="variation-row">
-                            <div class="label">
-                                <label for="<?php echo esc_attr(sanitize_title($attribute_name)); ?>">
-                                    <?php echo wc_attribute_label($attribute_name); ?>
+                    <?php 
+                    // Get the attribute taxonomies in their original order
+                    $attribute_taxonomies = wc_get_attribute_taxonomies();
+                    $ordered_attributes = array();
+                    
+                    // First, add taxonomy-based attributes in their defined order
+                    foreach ($attribute_taxonomies as $tax) {
+                        $taxonomy = wc_attribute_taxonomy_name($tax->attribute_name);
+                        if ($product->get_variation_attributes() && array_key_exists($taxonomy, $product->get_variation_attributes())) {
+                            $ordered_attributes[$taxonomy] = $product->get_variation_attributes()[$taxonomy];
+                        }
+                    }
+                    
+                    // Then add any custom product attributes
+                    foreach ($product->get_variation_attributes() as $attribute_name => $options) {
+                        if (!array_key_exists($attribute_name, $ordered_attributes)) {
+                            $ordered_attributes[$attribute_name] = $options;
+                        }
+                    }
+
+                    foreach ($ordered_attributes as $attribute_name => $options) : 
+                        $attribute_label = wc_attribute_label($attribute_name);
+                    ?>
+                        <div class="variation-row mb-6">
+                            <div class="label mb-2">
+                                <label for="<?php echo esc_attr(sanitize_title($attribute_name)); ?>" class="text-base uppercase">
+                                    <?php echo esc_html($attribute_label); ?>
                                 </label>
                             </div>
                             <div class="value">
-                                <div class="variation-select">
+                                <div class="variation-select flex flex-wrap gap-2">
                                     <?php
                                     $selected = isset($_REQUEST['attribute_' . sanitize_title($attribute_name)]) 
                                         ? wc_clean(wp_unslash($_REQUEST['attribute_' . sanitize_title($attribute_name)])) 
                                         : $product->get_variation_default_attribute($attribute_name);
+
+                                    // Get the terms in the correct order if it's a taxonomy
+                                    if (taxonomy_exists($attribute_name)) {
+                                        $terms = wc_get_product_terms(
+                                            $product->get_id(),
+                                            $attribute_name,
+                                            array('fields' => 'all')
+                                        );
+                                        
+                                        $options = array();
+                                        foreach ($terms as $term) {
+                                            if (in_array($term->slug, $product->get_variation_attributes()[$attribute_name])) {
+                                                $options[] = $term;
+                                            }
+                                        }
+                                    }
                                     
                                     foreach ($options as $option) : 
-                                        $selected_class = ($selected === $option) ? ' selected' : '';
+                                        $option_value = is_object($option) ? $option->slug : $option;
+                                        $option_name = is_object($option) ? $option->name : $option;
+                                        $selected_class = ($selected === $option_value) ? ' selected' : '';
                                     ?>
                                         <button type="button" 
-                                                class="variation-option<?php echo esc_attr($selected_class); ?>" 
+                                                class="variation-option border border-black px-4 py-2 rounded-full<?php echo esc_attr($selected_class); ?>" 
                                                 data-attribute="<?php echo esc_attr(sanitize_title($attribute_name)); ?>" 
-                                                data-value="<?php echo esc_attr($option); ?>">
-                                            <span class="option-text"><?php echo esc_html($option); ?></span>
+                                                data-value="<?php echo esc_attr($option_value); ?>">
+                                            <span class="option-text"><?php echo esc_html($option_name); ?></span>
                                         </button>
                                     <?php endforeach; ?>
                                     <input type="hidden" 
@@ -500,7 +577,7 @@ class Branch_Single_Product_Widget extends \Elementor\Widget_Base {
         </form>
 
         <script type="text/javascript">
-            var productVariations = <?php echo wp_json_encode($variations_data['variations']); ?>;
+            var productVariations = <?php echo wp_json_encode($variations_data); ?>;
         </script>
         <?php
     }
